@@ -151,7 +151,7 @@ func (rt *TransportRabbitMQ) AddReceiver(exchange string) error {
 	err := rt.channel.ExchangeDeclare(
 		exchange, // name
 		"fanout", // kind
-		true,     // durable
+		false,    // durable
 		true,     // autoDelete
 		false,    // internal
 		false,    // noWait
