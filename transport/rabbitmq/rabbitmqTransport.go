@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/leeliliang/transportWraper/transport"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 	"time"
 )
