@@ -24,7 +24,6 @@ func main() {
 		return
 	}
 	broke := []string{""}
-
 	kafkaInstance, err := kafka.GetKafkaProducer(broke, 2, logger)
 	if err != nil {
 		logger.Error("Failed to create Kafka transport", zap.Error(err))
@@ -93,7 +92,7 @@ func main() {
 		unifiedTransport.Write([]byte("test02"), "test02", "test02")
 		unifiedTransport.Write([]byte("consistent01"), "consistent01", "consistent01")
 		unifiedTransport.Write([]byte("consistent02"), "consistent02", "consistent02")
-		unifiedTransport.Write([]byte(""), "", "2")
+		unifiedTransport.Write([]byte(""), "", "3")
 	}()
 
 	for {
