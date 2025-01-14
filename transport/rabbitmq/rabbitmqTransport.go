@@ -152,7 +152,7 @@ func (rt *TransportRabbitMQ) AddReceiver(exchange string) error {
 		exchange, // name
 		"fanout", // kind
 		false,    // durable
-		true,     // autoDelete
+		false,    // autoDelete
 		false,    // internal
 		false,    // noWait
 		nil,      // args
