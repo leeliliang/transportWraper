@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"fmt"
 	"github.com/IBM/sarama"
 	"github.com/leeliliang/transportWraper/transport"
 	"go.uber.org/zap"
@@ -38,9 +39,15 @@ func (p *CustomPartitioner) Partition(msg *sarama.ProducerMessage, numPartitions
 		return 0, nil
 	}
 	key, err := msg.Key.Encode()
+	if err != nil || len(key) == 0 {
+		return 0, err // 键编码失败，返回错误
+	}
 	// 使用一致性哈希选择分区
 	p.logger.Debug("key", zap.String("key", string(key)))
 	consumer := p.ch.Get(string(key))
+	if consumer == "" {
+		return 0, fmt.Errorf("no consumer found for key: %s", string(key)) // 无法找到消费者，返回错误
+	}
 	p.logger.Debug("consumer", zap.String("consumer", consumer))
 	prefix := "liveConsumer"
 	// 去掉前缀

@@ -42,13 +42,13 @@ func main() {
 		return
 	}
 
-	err = rabbitmqInstance.AddConsistentSender("consistent01")
+	err = rabbitmqInstance.AddConsistentSender("testconsistent01")
 	if err != nil {
 		logger.Error("Failed to add sender", zap.Error(err))
 		return
 	}
 
-	err = rabbitmqInstance.AddConsistentSender("consistent02")
+	err = rabbitmqInstance.AddConsistentSender("testconsistent02")
 	if err != nil {
 		logger.Error("Failed to add sender", zap.Error(err))
 		return
@@ -66,13 +66,13 @@ func main() {
 		return
 	}
 
-	err = rabbitmqInstance.AddConsistentReceiver("consistent01")
+	err = rabbitmqInstance.AddConsistentReceiver("testconsistent01")
 	if err != nil {
 		logger.Error("Failed to add receiver", zap.Error(err))
 		return
 	}
 
-	err = rabbitmqInstance.AddConsistentReceiver("consistent02")
+	err = rabbitmqInstance.AddConsistentReceiver("testconsistent02")
 	if err != nil {
 		logger.Error("Failed to add receiver", zap.Error(err))
 		return
@@ -81,8 +81,8 @@ func main() {
 	unifiedTransport = transport.NewUnifiedTransport()
 	unifiedTransport.AddSender("test01", rabbitmqInstance)
 	unifiedTransport.AddSender("test02", rabbitmqInstance)
-	unifiedTransport.AddSender("consistent01", rabbitmqInstance)
-	unifiedTransport.AddSender("consistent02", rabbitmqInstance)
+	unifiedTransport.AddSender("testconsistent01", rabbitmqInstance)
+	unifiedTransport.AddSender("testconsistent02", rabbitmqInstance)
 	unifiedTransport.AddSender("", kafkaInstance)
 
 	unifiedTransport.AddReceiver("mq", rabbitmqInstance)
@@ -90,9 +90,9 @@ func main() {
 	go func() {
 		unifiedTransport.Write([]byte("test01"), "test01", "test01")
 		unifiedTransport.Write([]byte("test02"), "test02", "test02")
-		unifiedTransport.Write([]byte("consistent01"), "consistent01", "consistent01")
-		unifiedTransport.Write([]byte("consistent02"), "consistent02", "consistent02")
-		unifiedTransport.Write([]byte(""), "", "3")
+		unifiedTransport.Write([]byte("testconsistent01"), "testconsistent01", "consistent01")
+		unifiedTransport.Write([]byte("testconsistent02"), "testconsistent02", "consistent02")
+		unifiedTransport.Write([]byte(""), "", "")
 	}()
 
 	for {
