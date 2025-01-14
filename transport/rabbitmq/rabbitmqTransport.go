@@ -133,7 +133,7 @@ func (rt *TransportRabbitMQ) AddSender(exchange string) error {
 		exchange, // name
 		"fanout", // kind
 		true,     // durable
-		false,    // autoDelete
+		true,     // autoDelete
 		false,    // internal
 		false,    // noWait
 		nil,      // args
@@ -152,7 +152,7 @@ func (rt *TransportRabbitMQ) AddReceiver(exchange string) error {
 		exchange, // name
 		"fanout", // kind
 		true,     // durable
-		false,    // autoDelete
+		true,     // autoDelete
 		false,    // internal
 		false,    // noWait
 		nil,      // args
@@ -163,7 +163,7 @@ func (rt *TransportRabbitMQ) AddReceiver(exchange string) error {
 	}
 
 	rt.logger.Info("BindQueue", zap.String("queue", exchange), zap.String("queue", queue))
-	if _, err := rt.channel.QueueDeclare(queue, true, false, false, false, nil); err != nil {
+	if _, err := rt.channel.QueueDeclare(queue, true, true, false, false, nil); err != nil {
 		rt.logger.Error("error in declaring the queue", zap.Error(err))
 		return fmt.Errorf("error in declaring the queue %s", err)
 	}
