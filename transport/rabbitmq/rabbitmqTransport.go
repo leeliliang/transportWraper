@@ -136,6 +136,11 @@ func (rt *TransportRabbitMQ) AddSender(exchange string) error {
 	return rt.declareExchange(exchange, "fanout")
 }
 
+func (rt *TransportRabbitMQ) AddCustomSender(exchange, kind string, durable, autoDelete bool) error {
+	rt.logger.Info("AddSender", zap.String("exchange", exchange))
+	return rt.declareCustomExchange(exchange, kind, durable, autoDelete)
+}
+
 func (rt *TransportRabbitMQ) AddReceiver(exchange string) error {
 	rt.logger.Info("AddReceiver", zap.String("exchange", exchange))
 	queue := rt.prefix + transport.GenerateUUID()
@@ -171,6 +176,19 @@ func (rt *TransportRabbitMQ) AddConsistentReceiver(exchange string) error {
 
 func (rt *TransportRabbitMQ) declareExchange(name, kind string) error {
 	if err := rt.channel.ExchangeDeclare(name, kind, false, false, false, false, nil); err != nil {
+		rt.logger.Error("ExchangeDeclare error", zap.Error(err))
+		return err
+	}
+	if kind == "x-consistent-hash" {
+		rt.consistentSenders[name] = name
+	} else {
+		rt.senders[name] = name
+	}
+	return nil
+}
+
+func (rt *TransportRabbitMQ) declareCustomExchange(name, kind string, durable, autoDelete bool) error {
+	if err := rt.channel.ExchangeDeclare(name, kind, durable, autoDelete, false, false, nil); err != nil {
 		rt.logger.Error("ExchangeDeclare error", zap.Error(err))
 		return err
 	}
