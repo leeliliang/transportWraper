@@ -50,8 +50,6 @@ func NewTransportRabbitMQ(amqpURI, prefix string, logger *zap.Logger) (*Transpor
 		return nil, err
 	}
 
-	go transportRabbitMQ.monitorConnection()
-	go transportRabbitMQ.monitorReconnect()
 	return transportRabbitMQ, nil
 }
 
@@ -75,6 +73,9 @@ func (rt *TransportRabbitMQ) Connect() error {
 	if err != nil {
 		return fmt.Errorf("Channel: %w", err)
 	}
+
+	go rt.monitorConnection()
+	go rt.monitorReconnect()
 
 	return nil
 }
