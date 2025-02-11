@@ -30,49 +30,25 @@ func main() {
 		return
 	}
 
-	err = rabbitmqInstance.AddSender("test01")
+	err = rabbitmqInstance.AddSender("test01", "facout", true, true)
 	if err != nil {
 		logger.Error("Failed to add sender", zap.Error(err))
 		return
 	}
 
-	err = rabbitmqInstance.AddSender("test02")
+	err = rabbitmqInstance.AddSender("test02", "facout", true, true)
 	if err != nil {
 		logger.Error("Failed to add sender", zap.Error(err))
 		return
 	}
 
-	err = rabbitmqInstance.AddConsistentSender("testconsistent01")
-	if err != nil {
-		logger.Error("Failed to add sender", zap.Error(err))
-		return
-	}
-
-	err = rabbitmqInstance.AddConsistentSender("testconsistent02")
-	if err != nil {
-		logger.Error("Failed to add sender", zap.Error(err))
-		return
-	}
-
-	err = rabbitmqInstance.AddReceiver("test01")
+	err = rabbitmqInstance.AddReceiver("test01", "facout", true, true)
 	if err != nil {
 		logger.Error("Failed to add receiver", zap.Error(err))
 		return
 	}
 
-	err = rabbitmqInstance.AddReceiver("test02")
-	if err != nil {
-		logger.Error("Failed to add receiver", zap.Error(err))
-		return
-	}
-
-	err = rabbitmqInstance.AddConsistentReceiver("testconsistent01")
-	if err != nil {
-		logger.Error("Failed to add receiver", zap.Error(err))
-		return
-	}
-
-	err = rabbitmqInstance.AddConsistentReceiver("testconsistent02")
+	err = rabbitmqInstance.AddReceiver("test02", "facout", true, true)
 	if err != nil {
 		logger.Error("Failed to add receiver", zap.Error(err))
 		return

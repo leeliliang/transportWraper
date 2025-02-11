@@ -9,34 +9,40 @@ import (
 	"time"
 )
 
+type ConfigRabbitMQInfo struct {
+	Durable    bool
+	AutoDelete bool
+	Kind       string
+}
+
 type TransportRabbitMQ struct {
-	amqpURI             string
-	conn                *amqp.Connection
-	channel             *amqp.Channel
-	senders             map[string]string
-	receivers           map[string]<-chan amqp.Delivery
-	consistentSenders   map[string]string
-	consistentReceivers map[string]<-chan amqp.Delivery
-	msgChan             chan amqp.Delivery
-	errorChan           chan error
-	logger              *zap.Logger
-	prefix              string
-	reConnect           bool
+	amqpURI       string
+	conn          *amqp.Connection
+	channel       *amqp.Channel
+	senders       map[string]string
+	receivers     map[string]<-chan amqp.Delivery
+	sendersInfo   map[string]ConfigRabbitMQInfo
+	receiversInfo map[string]ConfigRabbitMQInfo
+	msgChan       chan amqp.Delivery
+	errorChan     chan error
+	logger        *zap.Logger
+	prefix        string
+	reConnect     bool
 }
 
 // NewTransportRabbitMQ 创建一个新的 TransportRabbitMQ
 func NewTransportRabbitMQ(amqpURI, prefix string, logger *zap.Logger) (*TransportRabbitMQ, error) {
 	transportRabbitMQ := &TransportRabbitMQ{
-		amqpURI:             amqpURI,
-		senders:             make(map[string]string),
-		receivers:           make(map[string]<-chan amqp.Delivery),
-		consistentSenders:   make(map[string]string),
-		consistentReceivers: make(map[string]<-chan amqp.Delivery),
-		msgChan:             make(chan amqp.Delivery, 1000),
-		errorChan:           make(chan error),
-		reConnect:           false,
-		logger:              logger,
-		prefix:              prefix,
+		amqpURI:       amqpURI,
+		senders:       make(map[string]string),
+		receivers:     make(map[string]<-chan amqp.Delivery),
+		sendersInfo:   make(map[string]ConfigRabbitMQInfo),
+		receiversInfo: make(map[string]ConfigRabbitMQInfo),
+		msgChan:       make(chan amqp.Delivery, 1000),
+		errorChan:     make(chan error),
+		reConnect:     false,
+		logger:        logger,
+		prefix:        prefix,
 	}
 
 	if err := transportRabbitMQ.Connect(); err != nil {
@@ -101,107 +107,64 @@ func (rt *TransportRabbitMQ) Reconnect() error {
 	}
 
 	for exchange := range rt.senders {
-		if err := rt.AddSender(exchange); err != nil {
+		mqConfig := rt.sendersInfo[exchange]
+		if err := rt.AddSender(exchange, mqConfig.Kind, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
 			rt.logger.Error("AddSender error", zap.Error(err))
 			return err
 		}
 	}
 
-	for exchange := range rt.consistentSenders {
-		if err := rt.AddConsistentSender(exchange); err != nil {
-			rt.logger.Error("AddConsistentSender error", zap.Error(err))
-			return err
-		}
-	}
-
 	for exchange := range rt.receivers {
-		if err := rt.AddReceiver(exchange); err != nil {
+		mqConfig := rt.receiversInfo[exchange]
+		if err := rt.AddReceiver(exchange, mqConfig.Kind, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
 			rt.logger.Error("AddReceiver error", zap.Error(err))
 			return err
 		}
 	}
 
-	for exchange := range rt.consistentReceivers {
-		if err := rt.AddConsistentReceiver(exchange); err != nil {
-			rt.logger.Error("AddConsistentReceiver error", zap.Error(err))
-			return err
-		}
-	}
-
 	return nil
 }
 
-func (rt *TransportRabbitMQ) AddSender(exchange string) error {
+func (rt *TransportRabbitMQ) AddSender(exchange, kind string, durable, autoDelete bool) error {
 	rt.logger.Info("AddSender", zap.String("exchange", exchange))
-	return rt.declareExchange(exchange, "fanout")
+	rt.sendersInfo[exchange] = ConfigRabbitMQInfo{
+		Durable:    durable,
+		AutoDelete: autoDelete,
+		Kind:       kind,
+	}
+	return rt.declareExchange(exchange, kind, durable, autoDelete)
 }
 
-func (rt *TransportRabbitMQ) AddCustomSender(exchange, kind string, durable, autoDelete bool) error {
-	rt.logger.Info("AddSender", zap.String("exchange", exchange))
-	return rt.declareCustomExchange(exchange, kind, durable, autoDelete)
-}
-
-func (rt *TransportRabbitMQ) AddReceiver(exchange string) error {
+func (rt *TransportRabbitMQ) AddReceiver(exchange, kind string, durable, autoDelete bool) error {
 	rt.logger.Info("AddReceiver", zap.String("exchange", exchange))
 	queue := rt.prefix + transport.GenerateUUID()
-	if err := rt.declareExchange(exchange, "fanout"); err != nil {
+	rt.receiversInfo[exchange] = ConfigRabbitMQInfo{
+		Durable:    durable,
+		AutoDelete: autoDelete,
+		Kind:       kind,
+	}
+	if err := rt.declareExchange(exchange, kind, durable, autoDelete); err != nil {
 		return err
 	}
 
-	if err := rt.bindQueue(queue, exchange); err != nil {
+	if err := rt.bindQueue(queue, exchange, false, true); err != nil {
 		return err
 	}
 
-	return rt.consumeMessages(exchange, queue, "")
+	return rt.consumeMessages(exchange, queue, kind)
 }
 
-func (rt *TransportRabbitMQ) AddConsistentSender(exchange string) error {
-	rt.logger.Info("AddConsistentSender", zap.String("exchange", exchange))
-	return rt.declareExchange(exchange, "x-consistent-hash")
-}
-
-func (rt *TransportRabbitMQ) AddConsistentReceiver(exchange string) error {
-	rt.logger.Info("AddConsistentReceiver", zap.String("exchange", exchange))
-	queue := rt.prefix + transport.GenerateUUID()
-	if err := rt.declareExchange(exchange, "x-consistent-hash"); err != nil {
-		return err
-	}
-
-	if err := rt.bindQueue(queue, exchange); err != nil {
-		return err
-	}
-
-	return rt.consumeMessages(exchange, queue, "x-consistent-hash")
-}
-
-func (rt *TransportRabbitMQ) declareExchange(name, kind string) error {
-	if err := rt.channel.ExchangeDeclare(name, kind, false, false, false, false, nil); err != nil {
-		rt.logger.Error("ExchangeDeclare error", zap.Error(err))
-		return err
-	}
-	if kind == "x-consistent-hash" {
-		rt.consistentSenders[name] = name
-	} else {
-		rt.senders[name] = name
-	}
-	return nil
-}
-
-func (rt *TransportRabbitMQ) declareCustomExchange(name, kind string, durable, autoDelete bool) error {
+func (rt *TransportRabbitMQ) declareExchange(name, kind string, durable, autoDelete bool) error {
 	if err := rt.channel.ExchangeDeclare(name, kind, durable, autoDelete, false, false, nil); err != nil {
 		rt.logger.Error("ExchangeDeclare error", zap.Error(err))
 		return err
 	}
-	if kind == "x-consistent-hash" {
-		rt.consistentSenders[name] = name
-	} else {
-		rt.senders[name] = name
-	}
+	rt.senders[name] = name
 	return nil
 }
 
-func (rt *TransportRabbitMQ) bindQueue(queue, exchange string) error {
-	if _, err := rt.channel.QueueDeclare(queue, false, true, false, false, nil); err != nil {
+func (rt *TransportRabbitMQ) bindQueue(queue, exchange string, durable, autoDelete bool) error {
+	if _, err := rt.channel.QueueDeclare(queue, durable, autoDelete, false, false, nil); err != nil {
 		return fmt.Errorf("error in declaring the queue: %w", err)
 	}
 
@@ -219,11 +182,7 @@ func (rt *TransportRabbitMQ) consumeMessages(exchange, queue, kind string) error
 		return fmt.Errorf("Consume error: %w", err)
 	}
 
-	if kind == "x-consistent-hash" {
-		rt.consistentReceivers[exchange] = deliveries
-	} else {
-		rt.receivers[exchange] = deliveries
-	}
+	rt.receivers[exchange] = deliveries
 
 	go func(msg <-chan amqp.Delivery) {
 		for m := range msg {
@@ -267,8 +226,7 @@ func (rt *TransportRabbitMQ) Write(msg []byte, exchange, routerKey string) error
 
 func (rt *TransportRabbitMQ) publishMessage(exchange, routerKey string, p amqp.Publishing) error {
 	_, exists := rt.senders[exchange]
-	_, existsConsistent := rt.consistentSenders[exchange]
-	if exists || existsConsistent {
+	if exists {
 		err := rt.channel.Publish(exchange, routerKey, false, false, p)
 		if err != nil {
 			rt.logger.Error("Error in Publishing", zap.Error(err))
