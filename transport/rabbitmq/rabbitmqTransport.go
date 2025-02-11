@@ -92,7 +92,6 @@ func (rt *TransportRabbitMQ) monitorReconnect() {
 		time.Sleep(1 * time.Second)
 		if err := rt.Reconnect(); err != nil {
 			rt.logger.Error("Reconnect error", zap.Error(err))
-			return
 		}
 	}
 	rt.logger.Info("Reconnecting finish")
@@ -108,6 +107,7 @@ func (rt *TransportRabbitMQ) Reconnect() error {
 
 	for exchange := range rt.senders {
 		mqConfig := rt.sendersInfo[exchange]
+		rt.logger.Info("AddSender", zap.String("exchange", exchange), zap.String("kind", mqConfig.Kind), zap.Bool("durable", mqConfig.Durable), zap.Bool("autoDelete", mqConfig.AutoDelete))
 		if err := rt.AddSender(exchange, mqConfig.Kind, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
 			rt.logger.Error("AddSender error", zap.Error(err))
 			return err
@@ -116,6 +116,7 @@ func (rt *TransportRabbitMQ) Reconnect() error {
 
 	for exchange := range rt.receivers {
 		mqConfig := rt.receiversInfo[exchange]
+		rt.logger.Info("AddReceiver", zap.String("exchange", exchange), zap.String("kind", mqConfig.Kind), zap.Bool("durable", mqConfig.Durable), zap.Bool("autoDelete", mqConfig.AutoDelete))
 		if err := rt.AddReceiver(exchange, mqConfig.Kind, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
 			rt.logger.Error("AddReceiver error", zap.Error(err))
 			return err
@@ -126,12 +127,13 @@ func (rt *TransportRabbitMQ) Reconnect() error {
 }
 
 func (rt *TransportRabbitMQ) AddSender(exchange, kind string, durable, autoDelete bool) error {
-	rt.logger.Info("AddSender", zap.String("exchange", exchange))
+	rt.logger.Info("AddSender", zap.String("exchange", exchange), zap.String("kind", kind), zap.Bool("durable", durable), zap.Bool("autoDelete", autoDelete))
 	rt.sendersInfo[exchange] = ConfigRabbitMQInfo{
 		Durable:    durable,
 		AutoDelete: autoDelete,
 		Kind:       kind,
 	}
+	rt.senders[exchange] = exchange
 	return rt.declareExchange(exchange, kind, durable, autoDelete)
 }
 
@@ -159,7 +161,6 @@ func (rt *TransportRabbitMQ) declareExchange(name, kind string, durable, autoDel
 		rt.logger.Error("ExchangeDeclare error", zap.Error(err))
 		return err
 	}
-	rt.senders[name] = name
 	return nil
 }
 
