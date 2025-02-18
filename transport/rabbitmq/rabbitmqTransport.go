@@ -118,7 +118,7 @@ func (rt *TransportRabbitMQ) Reconnect() error {
 
 	for exchange := range rt.receivers {
 		mqConfig := rt.receiversInfo[exchange]
-		rt.logger.Info("AddReceiver", zap.String("exchange", exchange), zap.String("kind", mqConfig.Kind), zap.Bool("durable", mqConfig.Durable), zap.Bool("autoDelete", mqConfig.AutoDelete))
+		rt.logger.Info("AddReceiver", zap.String("exchange", exchange), zap.String("kind", mqConfig.Kind), zap.String("queue", mqConfig.Queue), zap.Bool("durable", mqConfig.Durable), zap.Bool("autoDelete", mqConfig.AutoDelete))
 		if err := rt.AddReceiver(exchange, mqConfig.Kind, mqConfig.Queue, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
 			rt.logger.Error("AddReceiver error", zap.Error(err))
 			return err
@@ -140,11 +140,11 @@ func (rt *TransportRabbitMQ) AddSender(exchange, kind string, durable, autoDelet
 }
 
 func (rt *TransportRabbitMQ) AddReceiver(exchange, kind, queue string, durable, autoDelete bool) error {
-	rt.logger.Info("AddReceiver", zap.String("exchange", exchange))
 	if queue == "" {
 		// 使用 UUID 作为队列名称
 		queue = rt.prefix + transport.GenerateUUID()
 	}
+	rt.logger.Info("AddReceiver", zap.String("exchange", exchange), zap.String("queue", queue))
 	//queue := rt.prefix + transport.GenerateUUID()
 	rt.receiversInfo[exchange] = ConfigRabbitMQInfo{
 		Durable:    durable,
