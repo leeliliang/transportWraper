@@ -42,13 +42,13 @@ func main() {
 		return
 	}
 
-	err = rabbitmqInstance.AddReceiver("test01", "facout", true, true)
+	err = rabbitmqInstance.AddReceiver("test01", "facout", "", true, true)
 	if err != nil {
 		logger.Error("Failed to add receiver", zap.Error(err))
 		return
 	}
 
-	err = rabbitmqInstance.AddReceiver("test02", "facout", true, true)
+	err = rabbitmqInstance.AddReceiver("test02", "facout", "", true, true)
 	if err != nil {
 		logger.Error("Failed to add receiver", zap.Error(err))
 		return

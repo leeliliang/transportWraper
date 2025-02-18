@@ -13,6 +13,7 @@ type ConfigRabbitMQInfo struct {
 	Durable    bool
 	AutoDelete bool
 	Kind       string
+	Queue      string
 }
 
 type TransportRabbitMQ struct {
@@ -118,7 +119,7 @@ func (rt *TransportRabbitMQ) Reconnect() error {
 	for exchange := range rt.receivers {
 		mqConfig := rt.receiversInfo[exchange]
 		rt.logger.Info("AddReceiver", zap.String("exchange", exchange), zap.String("kind", mqConfig.Kind), zap.Bool("durable", mqConfig.Durable), zap.Bool("autoDelete", mqConfig.AutoDelete))
-		if err := rt.AddReceiver(exchange, mqConfig.Kind, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
+		if err := rt.AddReceiver(exchange, mqConfig.Kind, mqConfig.Queue, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
 			rt.logger.Error("AddReceiver error", zap.Error(err))
 			return err
 		}
@@ -138,13 +139,18 @@ func (rt *TransportRabbitMQ) AddSender(exchange, kind string, durable, autoDelet
 	return rt.declareExchange(exchange, kind, durable, autoDelete)
 }
 
-func (rt *TransportRabbitMQ) AddReceiver(exchange, kind string, durable, autoDelete bool) error {
+func (rt *TransportRabbitMQ) AddReceiver(exchange, kind, queue string, durable, autoDelete bool) error {
 	rt.logger.Info("AddReceiver", zap.String("exchange", exchange))
-	queue := rt.prefix + transport.GenerateUUID()
+	if queue == "" {
+		// 使用 UUID 作为队列名称
+		queue = rt.prefix + transport.GenerateUUID()
+	}
+	//queue := rt.prefix + transport.GenerateUUID()
 	rt.receiversInfo[exchange] = ConfigRabbitMQInfo{
 		Durable:    durable,
 		AutoDelete: autoDelete,
 		Kind:       kind,
+		Queue:      queue,
 	}
 	if err := rt.declareExchange(exchange, kind, durable, autoDelete); err != nil {
 		return err
