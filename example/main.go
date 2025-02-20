@@ -59,7 +59,7 @@ func main() {
 	unifiedTransport.AddSender("test02", rabbitmqInstance)
 	unifiedTransport.AddSender("testconsistent01", rabbitmqInstance)
 	unifiedTransport.AddSender("testconsistent02", rabbitmqInstance)
-	unifiedTransport.AddSender("dev_bigdata_live_room_interaction_record", kafkaInstance)
+	unifiedTransport.AddSender("", kafkaInstance)
 
 	unifiedTransport.AddReceiver("mq", rabbitmqInstance)
 
@@ -68,7 +68,7 @@ func main() {
 		unifiedTransport.Write([]byte("test02"), "test02", "test02")
 		unifiedTransport.Write([]byte("testconsistent01"), "testconsistent01", "consistent01")
 		unifiedTransport.Write([]byte("testconsistent02"), "testconsistent02", "consistent02")
-		unifiedTransport.Write([]byte("dev_bigdata_live_room_interaction_record"), "dev_bigdata_live_room_interaction_record", "")
+		unifiedTransport.Write([]byte(""), "", "")
 	}()
 
 	for {
