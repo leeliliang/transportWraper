@@ -137,8 +137,8 @@ func (rt *TransportRabbitMQ) AddSender(configInfo *ConfigRabbitMQInfo) error {
 
 func (rt *TransportRabbitMQ) AddReceiver(configInfo *ConfigRabbitMQInfo) error {
 	rt.logger.Info("AddReceiver", zap.String("id", configInfo.ID), zap.Any("configInfo", configInfo))
-	rt.logger.Info("AddReceiver", zap.Any("configInfo", configInfo))
 	rt.receiversInfo[configInfo.Exchange] = configInfo
+	rt.senders[configInfo.Exchange] = configInfo.Exchange
 	if err := rt.declareExchange(configInfo); err != nil {
 		return err
 	}
