@@ -10,10 +10,16 @@ import (
 )
 
 type ConfigRabbitMQInfo struct {
-	Durable    bool
-	AutoDelete bool
-	Kind       string
-	Queue      string
+	ID                 string
+	Exchange           string
+	Kind               string
+	Queue              string
+	BindingKey         string
+	ExchangeDurable    bool
+	ExchangeAutoDelete bool
+	QueueDurable       bool
+	QueueAutoDelete    bool
+	Priority           int
 }
 
 type TransportRabbitMQ struct {
@@ -22,28 +28,26 @@ type TransportRabbitMQ struct {
 	channel       *amqp.Channel
 	senders       map[string]string
 	receivers     map[string]<-chan amqp.Delivery
-	sendersInfo   map[string]ConfigRabbitMQInfo
-	receiversInfo map[string]ConfigRabbitMQInfo
+	sendersInfo   map[string]*ConfigRabbitMQInfo
+	receiversInfo map[string]*ConfigRabbitMQInfo
 	msgChan       chan amqp.Delivery
 	errorChan     chan error
 	logger        *zap.Logger
-	prefix        string
 	reConnect     bool
 }
 
 // NewTransportRabbitMQ 创建一个新的 TransportRabbitMQ
-func NewTransportRabbitMQ(amqpURI, prefix string, logger *zap.Logger) (*TransportRabbitMQ, error) {
+func NewTransportRabbitMQ(amqpURI string, logger *zap.Logger) (*TransportRabbitMQ, error) {
 	transportRabbitMQ := &TransportRabbitMQ{
 		amqpURI:       amqpURI,
 		senders:       make(map[string]string),
 		receivers:     make(map[string]<-chan amqp.Delivery),
-		sendersInfo:   make(map[string]ConfigRabbitMQInfo),
-		receiversInfo: make(map[string]ConfigRabbitMQInfo),
+		sendersInfo:   make(map[string]*ConfigRabbitMQInfo),
+		receiversInfo: make(map[string]*ConfigRabbitMQInfo),
 		msgChan:       make(chan amqp.Delivery, 1000),
 		errorChan:     make(chan error),
 		reConnect:     false,
 		logger:        logger,
-		prefix:        prefix,
 	}
 
 	if err := transportRabbitMQ.Connect(); err != nil {
@@ -107,19 +111,15 @@ func (rt *TransportRabbitMQ) Reconnect() error {
 		return err
 	}
 
-	for exchange := range rt.senders {
-		mqConfig := rt.sendersInfo[exchange]
-		rt.logger.Info("AddSender", zap.String("exchange", exchange), zap.String("kind", mqConfig.Kind), zap.Bool("durable", mqConfig.Durable), zap.Bool("autoDelete", mqConfig.AutoDelete))
-		if err := rt.AddSender(exchange, mqConfig.Kind, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
+	for _, configInfo := range rt.sendersInfo {
+		if err := rt.AddSender(configInfo); err != nil {
 			rt.logger.Error("AddSender error", zap.Error(err))
 			return err
 		}
 	}
 
-	for exchange := range rt.receivers {
-		mqConfig := rt.receiversInfo[exchange]
-		rt.logger.Info("AddReceiver", zap.String("exchange", exchange), zap.String("kind", mqConfig.Kind), zap.String("queue", mqConfig.Queue), zap.Bool("durable", mqConfig.Durable), zap.Bool("autoDelete", mqConfig.AutoDelete))
-		if err := rt.AddReceiver(exchange, mqConfig.Kind, mqConfig.Queue, mqConfig.Durable, mqConfig.AutoDelete); err != nil {
+	for _, configInfo := range rt.receiversInfo {
+		if err := rt.AddReceiver(configInfo); err != nil {
 			rt.logger.Error("AddReceiver error", zap.Error(err))
 			return err
 		}
@@ -128,69 +128,63 @@ func (rt *TransportRabbitMQ) Reconnect() error {
 	return nil
 }
 
-func (rt *TransportRabbitMQ) AddSender(exchange, kind string, durable, autoDelete bool) error {
-	rt.logger.Info("AddSender", zap.String("exchange", exchange), zap.String("kind", kind), zap.Bool("durable", durable), zap.Bool("autoDelete", autoDelete))
-	rt.sendersInfo[exchange] = ConfigRabbitMQInfo{
-		Durable:    durable,
-		AutoDelete: autoDelete,
-		Kind:       kind,
-	}
-	rt.senders[exchange] = exchange
-	return rt.declareExchange(exchange, kind, durable, autoDelete)
+func (rt *TransportRabbitMQ) AddSender(configInfo *ConfigRabbitMQInfo) error {
+	rt.logger.Info("AddSender", zap.String("id", configInfo.ID), zap.Any("configInfo", configInfo))
+	rt.sendersInfo[configInfo.Exchange] = configInfo
+	rt.senders[configInfo.Exchange] = configInfo.Exchange
+	return rt.declareExchange(configInfo)
 }
 
-func (rt *TransportRabbitMQ) AddReceiver(exchange, kind, queue string, durable, autoDelete bool) error {
-	if queue == "" {
-		// 使用 UUID 作为队列名称
-		queue = rt.prefix + transport.GenerateUUID()
-	}
-	rt.logger.Info("AddReceiver", zap.String("exchange", exchange), zap.String("queue", queue))
-	//queue := rt.prefix + transport.GenerateUUID()
-	rt.receiversInfo[exchange] = ConfigRabbitMQInfo{
-		Durable:    durable,
-		AutoDelete: autoDelete,
-		Kind:       kind,
-		Queue:      queue,
-	}
-	if err := rt.declareExchange(exchange, kind, durable, autoDelete); err != nil {
+func (rt *TransportRabbitMQ) AddReceiver(configInfo *ConfigRabbitMQInfo) error {
+	rt.logger.Info("AddReceiver", zap.String("id", configInfo.ID), zap.Any("configInfo", configInfo))
+	rt.logger.Info("AddReceiver", zap.Any("configInfo", configInfo))
+	rt.receiversInfo[configInfo.Exchange] = configInfo
+	if err := rt.declareExchange(configInfo); err != nil {
 		return err
 	}
 
-	if err := rt.bindQueue(queue, exchange, false, true); err != nil {
+	if err := rt.bindQueue(configInfo); err != nil {
 		return err
 	}
 
-	return rt.consumeMessages(exchange, queue, kind)
+	return rt.consumeMessages(configInfo)
 }
 
-func (rt *TransportRabbitMQ) declareExchange(name, kind string, durable, autoDelete bool) error {
-	if err := rt.channel.ExchangeDeclare(name, kind, durable, autoDelete, false, false, nil); err != nil {
+func (rt *TransportRabbitMQ) declareExchange(configInfo *ConfigRabbitMQInfo) error {
+	if err := rt.channel.ExchangeDeclare(configInfo.Exchange, configInfo.Kind, configInfo.ExchangeDurable, configInfo.ExchangeAutoDelete, false, false, nil); err != nil {
 		rt.logger.Error("ExchangeDeclare error", zap.Error(err))
 		return err
 	}
 	return nil
 }
 
-func (rt *TransportRabbitMQ) bindQueue(queue, exchange string, durable, autoDelete bool) error {
-	if _, err := rt.channel.QueueDeclare(queue, durable, autoDelete, false, false, nil); err != nil {
+func (rt *TransportRabbitMQ) bindQueue(configInfo *ConfigRabbitMQInfo) error {
+	var args amqp.Table = nil
+	if configInfo.Priority > 0 {
+		args = amqp.Table{
+			"x-max-priority": configInfo.Priority,
+		}
+	}
+
+	if _, err := rt.channel.QueueDeclare(configInfo.Queue, configInfo.QueueDurable, configInfo.QueueAutoDelete, false, false, args); err != nil {
 		return fmt.Errorf("error in declaring the queue: %w", err)
 	}
 
 	// 使用整数作为绑定键
-	bindingKey := 1 // 这里使用整数 1 作为绑定键
-	if err := rt.channel.QueueBind(queue, fmt.Sprintf("%d", bindingKey), exchange, false, nil); err != nil {
+
+	if err := rt.channel.QueueBind(configInfo.Queue, configInfo.BindingKey, configInfo.Exchange, false, nil); err != nil {
 		return fmt.Errorf("Queue Bind error: %w", err)
 	}
 	return nil
 }
 
-func (rt *TransportRabbitMQ) consumeMessages(exchange, queue, kind string) error {
-	deliveries, err := rt.channel.Consume(queue, queue, false, false, false, false, nil)
+func (rt *TransportRabbitMQ) consumeMessages(configInfo *ConfigRabbitMQInfo) error {
+	deliveries, err := rt.channel.Consume(configInfo.Queue, configInfo.Queue, false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("Consume error: %w", err)
 	}
 
-	rt.receivers[exchange] = deliveries
+	rt.receivers[configInfo.ID] = deliveries
 
 	go func(msg <-chan amqp.Delivery) {
 		for m := range msg {
