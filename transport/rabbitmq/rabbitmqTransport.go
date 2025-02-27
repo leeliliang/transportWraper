@@ -209,18 +209,34 @@ func (rt *TransportRabbitMQ) Read() (transport.UnificationMessage, error) {
 }
 
 // Write 向 RabbitMQ 发送消息
-func (rt *TransportRabbitMQ) Write(msg []byte, exchange, routerKey string) error {
+func (rt *TransportRabbitMQ) Write(msg []byte, exchange, routerKey string, priority int) error {
 	rt.logger.Info("Write message", zap.String("exchange", exchange), zap.String("msg", string(msg)))
 
-	p := amqp.Publishing{
-		Headers:     amqp.Table{"type": "text/plain"},
-		ContentType: "text/plain",
-		Body:        msg,
+	var p amqp.Publishing
+	if priority != 0 {
+		p = amqp.Publishing{
+			Headers:     amqp.Table{"type": "text/plain"},
+			ContentType: "text/plain",
+			Body:        msg,
+			Priority:    uint8(priority),
+		}
+	} else {
+		p = amqp.Publishing{
+			Headers:     amqp.Table{"type": "text/plain"},
+			ContentType: "text/plain",
+			Body:        msg,
+		}
 	}
 
-	if err := rt.publishMessage(exchange, routerKey, p); err != nil {
-		rt.logger.Error("Error in Publishing", zap.Error(err))
-		return err
+	_, exists := rt.senders[exchange]
+	if exists {
+		err := rt.channel.Publish(exchange, routerKey, false, false, p)
+		if err != nil {
+			rt.logger.Error("Error in Publishing", zap.Error(err))
+			return fmt.Errorf("Error in Publishing: %w", err)
+		}
+	} else {
+		rt.logger.Error("Exchange not found", zap.String("exchange", exchange), zap.String("msg", string(msg)))
 	}
 
 	return nil
