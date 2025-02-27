@@ -12,7 +12,7 @@ var (
 // Transport 接口定义了传输层的基本操作
 type Transport interface {
 	Read() (UnificationMessage, error)
-	Write(p []byte, topic, routerKey string) error
+	Write(p []byte, topic, routerKey string, priority int) error
 	Close()
 }
 
@@ -72,10 +72,10 @@ func (u *UnifiedTransport) Read() (UnificationMessage, error) {
 }
 
 // Write 向传输层写入数据
-func (u *UnifiedTransport) Write(p []byte, topic, routerKey string) error {
+func (u *UnifiedTransport) Write(p []byte, topic, routerKey string, priority int) error {
 	transport, exist := u.senders[topic]
 	if exist {
-		err := transport.Write(p, topic, routerKey)
+		err := transport.Write(p, topic, routerKey, priority)
 		if err != nil {
 
 		}
