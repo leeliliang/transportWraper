@@ -210,8 +210,7 @@ func (rt *TransportRabbitMQ) Read() (transport.UnificationMessage, error) {
 
 // Write 向 RabbitMQ 发送消息
 func (rt *TransportRabbitMQ) Write(msg []byte, exchange, routerKey string, priority int) error {
-	rt.logger.Info("Write message", zap.String("exchange", exchange), zap.String("msg", string(msg)))
-
+	rt.logger.Info("Write message", zap.String("exchange", exchange), zap.String("routerKey", routerKey), zap.String("msg", string(msg)))
 	var p amqp.Publishing
 	if priority != 0 {
 		p = amqp.Publishing{
